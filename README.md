@@ -46,7 +46,7 @@ This generates the `image_filter` executable with `-O3` and `-fopenmp`.
 ### 2. Prepare Benchmark Images
 Convert your test images (e.g., standard PNGs) to binary PPM format:
 ```bash
-python3 image_converter.py my_input_image.png input.ppm
+python3 image_converter.py to_ppm image_input_folder ppm_output_folder
 ```
 
 ### 3. Run the Filters
@@ -57,8 +57,7 @@ Run the binary to apply both filters, evaluate execution speed, and verify outpu
 
 ### 4. Convert Back to PNG/JPG
 ```bash
-python3 image_converter.py output_gauss.ppm final_gauss.png
-python3 image_converter.py output_median.ppm final_median.png
+python3 image_converter.py to_png input_ppm_folder output_png_folder
 ```
 
 ## Technical Architecture Insights

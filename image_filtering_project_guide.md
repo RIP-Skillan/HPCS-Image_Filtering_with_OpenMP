@@ -38,7 +38,7 @@ pip install Pillow
 ### Step 2: Convert an input image to PPM
 Choose a high-resolution JPG or PNG image (e.g., a 1024x1024 or 3200x2400 image, matching the resolutions used in the paper's experiments) and convert it:
 ```bash
-python3 image_converter.py to_ppm my_test_image.png input_test.ppm
+python3 image_converter.py to_ppm input_image_folder output_ppm_folder.ppm
 ```
 
 ### Step 3: Compile the C++ program
@@ -60,8 +60,7 @@ Execute the binary with your input PPM image, output paths, and target thread co
 
 ### Step 5: Convert output PPM files back to PNG/JPG
 ```bash
-python3 image_converter.py to_png output_gaussian.ppm output_gaussian.png
-python3 image_converter.py to_png output_median.ppm output_median.png
+python3 image_converter.py to_png input_ppm_folder output_png_folder
 ```
 
 ---

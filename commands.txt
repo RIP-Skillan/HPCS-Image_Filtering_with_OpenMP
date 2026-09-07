@@ -1,0 +1,2 @@
+python3 image_converter.py to_ppm ../dataset/Dataset1/Noisy_folder ../dataset/Dataset1/Noisy_ppm/
+
