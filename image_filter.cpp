@@ -6,6 +6,7 @@
 #include <chrono>
 #include <cmath>
 #include <omp.h>
+#include <filesystem>
 
 // Coordinate clamping to handle image boundaries robustly
 inline int clamp(int val, int min, int max) {
@@ -208,109 +209,129 @@ bool verify_channels(const std::vector<unsigned char>& a, const std::vector<unsi
 }
 
 int main(int argc, char* argv[]) {
-    if (argc < 4) {
+    if (argc < 3) {
         std::cerr << "Usage: " << argv[0] << " <input.ppm> <out_gaussian.ppm> <out_median.ppm> [num_threads]" << std::endl;
         return 1;
     }
 
-    std::string input_file = argv[1];
-    std::string out_gauss_file = argv[2];
-    std::string out_median_file = argv[3];
+    std::string input_folder = argv[1];
+	std::string output_folder = argv[2];
+    std::filesystem::path file_path;
+    std::string input_file;
+    std::string out_gauss_file;
+    std::string out_median_file;
 
     int num_threads = omp_get_max_threads();
-    if (argc >= 5) {
+    if (argc >= 4) {
         num_threads = std::stoi(argv[4]);
     }
     omp_set_num_threads(num_threads);
 
-    std::cout << "===== OpenMP Image Filtering Benchmark =====" << std::endl;
-    std::cout << "Loading image: " << input_file << "..." << std::endl;
+    try {
+        if (std::filesystem::exists(input_folder) && std::filesystem::is_directory(input_folder)) {
+            for (const auto& entry: std::filesystem::directory_iterator(input_folder)) {
+                if (std::filesystem::is_regular_file(entry.status()) && entry.path().extension() == ".ppm") {
+                    file_path = entry.path(); 
+                    input_file = file_path.string();
+                    out_gauss_file = output_folder + (file_path.stem().string() + "_gauss" + file_path.extension().string());
+                    out_median_file = (output_folder) + (file_path.stem().string() + "_median" + file_path.extension().string());
+                
+                    
+                    std::cout << "===== OpenMP Image Filtering Benchmark =====" << std::endl;
+                    std::cout << "Loading image: " << input_file << "..." << std::endl;
+                    
+                    Image input_img;
+                    if (!read_ppm(input_file, input_img)) {
+                        return 1;
+                    }
 
-    Image input_img;
-    if (!read_ppm(input_file, input_img)) {
-        return 1;
+                    int w = input_img.width;
+                    int h = input_img.height;
+                    std::cout << "Resolution: " << w << "x" << h << " (" << (w * h / 1000000.0) << " Megapixels)" << std::endl;
+                    std::cout << "Threads configured: " << num_threads << " / " << omp_get_max_threads() << " max" << std::endl << std::endl;
+
+                    // Allocate output structures
+                    Image out_gauss_serial = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
+                    Image out_gauss_parallel = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
+                    
+                    Image out_median_serial = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
+                    Image out_median_parallel = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
+
+                    // ==========================================
+                    // 1. BENCHMARK GAUSSIAN FILTER
+                    // ==========================================
+                    std::cout << "--> Running 3x3 Gaussian Filter..." << std::endl;
+
+                    // Serial
+                    double start_time = omp_get_wtime();
+                    gaussian_filter_serial(w, h, input_img.r, out_gauss_serial.r);
+                    gaussian_filter_serial(w, h, input_img.g, out_gauss_serial.g);
+                    gaussian_filter_serial(w, h, input_img.b, out_gauss_serial.b);
+                    double gauss_serial_time = (omp_get_wtime() - start_time) * 1000.0; // ms
+                    std::cout << "    Sequential Time : " << gauss_serial_time << " ms" << std::endl;
+
+                    // Parallel
+                    start_time = omp_get_wtime();
+                    gaussian_filter_parallel(w, h, input_img.r, out_gauss_parallel.r);
+                    gaussian_filter_parallel(w, h, input_img.g, out_gauss_parallel.g);
+                    gaussian_filter_parallel(w, h, input_img.b, out_gauss_parallel.b);
+                    double gauss_parallel_time = (omp_get_wtime() - start_time) * 1000.0; // ms
+                    std::cout << "    Parallel Time   : " << gauss_parallel_time << " ms" << std::endl;
+
+                    // Verify
+                    bool gauss_ok = verify_channels(out_gauss_serial.r, out_gauss_parallel.r, "Gaussian Red") &&
+                                    verify_channels(out_gauss_serial.g, out_gauss_parallel.g, "Gaussian Green") &&
+                                    verify_channels(out_gauss_serial.b, out_gauss_parallel.b, "Gaussian Blue");
+                    if (gauss_ok) {
+                        std::cout << "    Verification    : PASSED" << std::endl;
+                        std::cout << "    Speedup         : " << (gauss_serial_time / gauss_parallel_time) << "x" << std::endl;
+                        write_ppm(out_gauss_file, out_gauss_parallel);
+                    } else {
+                        std::cout << "    Verification    : FAILED!" << std::endl;
+                    }
+                    std::cout << std::endl;
+
+                    // ==========================================
+                    // 2. BENCHMARK MEDIAN FILTER
+                    // ==========================================
+                    std::cout << "--> Running 3x3 Median Filter..." << std::endl;
+
+                    // Serial
+                    start_time = omp_get_wtime();
+                    median_filter_serial(w, h, input_img.r, out_median_serial.r);
+                    median_filter_serial(w, h, input_img.g, out_median_serial.g);
+                    median_filter_serial(w, h, input_img.b, out_median_serial.b);
+                    double median_serial_time = (omp_get_wtime() - start_time) * 1000.0; // ms
+                    std::cout << "    Sequential Time : " << median_serial_time << " ms" << std::endl;
+
+                    // Parallel
+                    start_time = omp_get_wtime();
+                    median_filter_parallel(w, h, input_img.r, out_median_parallel.r);
+                    median_filter_parallel(w, h, input_img.g, out_median_parallel.g);
+                    median_filter_parallel(w, h, input_img.b, out_median_parallel.b);
+                    double median_parallel_time = (omp_get_wtime() - start_time) * 1000.0; // ms
+                    std::cout << "    Parallel Time   : " << median_parallel_time << " ms" << std::endl;
+
+                    // Verify
+                    bool median_ok = verify_channels(out_median_serial.r, out_median_parallel.r, "Median Red") &&
+                                     verify_channels(out_median_serial.g, out_median_parallel.g, "Median Green") &&
+                                     verify_channels(out_median_serial.b, out_median_parallel.b, "Median Blue");
+                    if (median_ok) {
+                        std::cout << "    Verification    : PASSED" << std::endl;
+                        std::cout << "    Speedup         : " << (median_serial_time / median_parallel_time) << "x" << std::endl;
+                        write_ppm(out_median_file, out_median_parallel);
+                    } else {
+                        std::cout << "    Verification    : FAILED!" << std::endl;
+                    }
+                    std::cout << std::endl;
+
+                    std::cout << "============================================" << std::endl;
+                }
+            }
+        }
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Error: " << e.what() << "\n";
     }
 
-    int w = input_img.width;
-    int h = input_img.height;
-    std::cout << "Resolution: " << w << "x" << h << " (" << (w * h / 1000000.0) << " Megapixels)" << std::endl;
-    std::cout << "Threads configured: " << num_threads << " / " << omp_get_max_threads() << " max" << std::endl << std::endl;
-
-    // Allocate output structures
-    Image out_gauss_serial = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
-    Image out_gauss_parallel = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
-    
-    Image out_median_serial = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
-    Image out_median_parallel = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
-
-    // ==========================================
-    // 1. BENCHMARK GAUSSIAN FILTER
-    // ==========================================
-    std::cout << "--> Running 3x3 Gaussian Filter..." << std::endl;
-
-    // Serial
-    double start_time = omp_get_wtime();
-    gaussian_filter_serial(w, h, input_img.r, out_gauss_serial.r);
-    gaussian_filter_serial(w, h, input_img.g, out_gauss_serial.g);
-    gaussian_filter_serial(w, h, input_img.b, out_gauss_serial.b);
-    double gauss_serial_time = (omp_get_wtime() - start_time) * 1000.0; // ms
-    std::cout << "    Sequential Time : " << gauss_serial_time << " ms" << std::endl;
-
-    // Parallel
-    start_time = omp_get_wtime();
-    gaussian_filter_parallel(w, h, input_img.r, out_gauss_parallel.r);
-    gaussian_filter_parallel(w, h, input_img.g, out_gauss_parallel.g);
-    gaussian_filter_parallel(w, h, input_img.b, out_gauss_parallel.b);
-    double gauss_parallel_time = (omp_get_wtime() - start_time) * 1000.0; // ms
-    std::cout << "    Parallel Time   : " << gauss_parallel_time << " ms" << std::endl;
-
-    // Verify
-    bool gauss_ok = verify_channels(out_gauss_serial.r, out_gauss_parallel.r, "Gaussian Red") &&
-                    verify_channels(out_gauss_serial.g, out_gauss_parallel.g, "Gaussian Green") &&
-                    verify_channels(out_gauss_serial.b, out_gauss_parallel.b, "Gaussian Blue");
-    if (gauss_ok) {
-        std::cout << "    Verification    : PASSED" << std::endl;
-        std::cout << "    Speedup         : " << (gauss_serial_time / gauss_parallel_time) << "x" << std::endl;
-        write_ppm(out_gauss_file, out_gauss_parallel);
-    } else {
-        std::cout << "    Verification    : FAILED!" << std::endl;
-    }
-    std::cout << std::endl;
-
-    // ==========================================
-    // 2. BENCHMARK MEDIAN FILTER
-    // ==========================================
-    std::cout << "--> Running 3x3 Median Filter..." << std::endl;
-
-    // Serial
-    start_time = omp_get_wtime();
-    median_filter_serial(w, h, input_img.r, out_median_serial.r);
-    median_filter_serial(w, h, input_img.g, out_median_serial.g);
-    median_filter_serial(w, h, input_img.b, out_median_serial.b);
-    double median_serial_time = (omp_get_wtime() - start_time) * 1000.0; // ms
-    std::cout << "    Sequential Time : " << median_serial_time << " ms" << std::endl;
-
-    // Parallel
-    start_time = omp_get_wtime();
-    median_filter_parallel(w, h, input_img.r, out_median_parallel.r);
-    median_filter_parallel(w, h, input_img.g, out_median_parallel.g);
-    median_filter_parallel(w, h, input_img.b, out_median_parallel.b);
-    double median_parallel_time = (omp_get_wtime() - start_time) * 1000.0; // ms
-    std::cout << "    Parallel Time   : " << median_parallel_time << " ms" << std::endl;
-
-    // Verify
-    bool median_ok = verify_channels(out_median_serial.r, out_median_parallel.r, "Median Red") &&
-                     verify_channels(out_median_serial.g, out_median_parallel.g, "Median Green") &&
-                     verify_channels(out_median_serial.b, out_median_parallel.b, "Median Blue");
-    if (median_ok) {
-        std::cout << "    Verification    : PASSED" << std::endl;
-        std::cout << "    Speedup         : " << (median_serial_time / median_parallel_time) << "x" << std::endl;
-        write_ppm(out_median_file, out_median_parallel);
-    } else {
-        std::cout << "    Verification    : FAILED!" << std::endl;
-    }
-    std::cout << std::endl;
-
-    std::cout << "============================================" << std::endl;
-    return 0;
+	return 0;
 }

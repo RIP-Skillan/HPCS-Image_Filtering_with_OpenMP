@@ -34,7 +34,7 @@ if __name__ == '__main__':
     files = [f for f in os.listdir(in_folder) if os.path.isfile(in_folder + '/' + f)] 
     if mode == 'to_ppm':
         for file in files:
-            to_ppm(os.path.join(in_folder, file), os.path.join(out_folder, file))
+            to_ppm(os.path.join(in_folder, file), os.path.join(out_folder, file[:-3]+'ppm'))
     elif mode == 'to_png' or mode == 'to_jpg':
         for file in files:
             to_image(os.path.join(in_folder, file), os.path.join(out_folder, file))
