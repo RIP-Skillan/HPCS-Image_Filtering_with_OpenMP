@@ -13,11 +13,12 @@ The goal of this project is to implement, optimize, and benchmark 3D (RGB) digit
 ### Data Layout: Structure of Arrays (SoA)
 Color images are represented in the RGB format, requiring independent operations across three channels. Following the methodology of Section 3 and 5 of the paper, our implementation decomposes the image into three separate color channels ($R, G, B$) and represents them as independent, contiguous vectors (Structure of Arrays format) to maximize cache locality and memory throughput.
 
+**Dataset Used for Testing**: [Salt and Pepper Noise Dataset:Clean vs Noisy Image](https://www.kaggle.com/datasets/rajneesh231/salt-and-pepper-noise-images)
 ---
 
-## 2. Code Files Provided in Your Studio Panel
+## 2. Code Files Provided
 
-We have generated and delivered three essential files to your Studio panel:
+We have 4 essential code files:
 - **`image_filter.cpp`**: The complete C++ implementation containing the binary PPM image reader/writer, serial filter baselines, optimized parallel OpenMP filter implementations, correctness verification, and high-precision timing harnesses.
 - **`image_converter.py`**: A python script using PIL/Pillow to easily convert standard PNG/JPEG images into binary PPM (P6) format for the C++ program, and convert the C++ outputs back to standard PNG/JPEG images for visualization.
 - **`Makefile`**: A clean Unix Makefile configured to build the C++ program with aggressive optimizations (`-O3`) and OpenMP compiler directives (`-fopenmp`).
@@ -27,7 +28,7 @@ We have generated and delivered three essential files to your Studio panel:
 
 ## 3. Step-by-Step Implementation Workflow
 
-To execute your project, follow these steps on your multicore laptop (e.g., RTX 4050 laptop CPU) or course cluster.
+To execute this project, follow these steps on your multicore system.
 
 ### Step 1: Set up your environment
 Ensure you have a standard C++ compiler (`g++` or `clang++`) with OpenMP support and Python 3 installed.
@@ -37,7 +38,7 @@ pip install Pillow
 ```
 
 ### Step 2: Convert an input image to PPM
-Choose a high-resolution JPG or PNG image (e.g., a 1024x1024 or 3200x2400 image, matching the resolutions used in the paper's experiments) and convert it:
+Choose a high-resolution JPG or PNG image (e.g., a 1024x1024 or 3200x2400 image, matching the resolutions used in the paper's experiments) and convert it for best results:
 ```bash
 python3 image_converter.py to_ppm input_image_folder output_ppm_folder.ppm
 ```
@@ -53,7 +54,7 @@ g++ -O3 -fopenmp -Wall -Wextra image_filter.cpp -o image_filter
 ```
 
 ### Step 4: Run the Filters
-Execute the binary with your input PPM image, output paths, and target thread count:
+Execute the binary with your input PPM images, output paths, and target thread count:
 ```bash
 ./image_filter ppm_input_folder_path output_folder_path 4
 ```
