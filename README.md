@@ -32,6 +32,7 @@ These figures highlight the excellent strong scaling characteristics of OpenMP t
 - `image_filter.cpp`: Main implementation including the C++ image structure, serial baseline, parallel algorithms, and verification harness.
 - `image_converter.py`: Python script utilizing Pillow to convert standard image formats (`.png`, `.jpg`) into raw binary `.ppm` files and back.
 - `Makefile`: Automates building the project with aggressive compiler optimization flags (`-O3`) and OpenMP thread bindings.
+- `plot_benchmark.py`: Visualizes the Comparison between Sequential and Parallel Results
 - `image_filtering_project_guide.md`: A comprehensive report guide explaining cache optimization, SoA data structures, thread safety, and instructions for running benchmarks.
 
 ## Build & Execution Instructions
@@ -52,12 +53,17 @@ python3 image_converter.py to_ppm image_input_folder ppm_output_folder
 ### 3. Run the Filters
 Run the binary to apply both filters, evaluate execution speed, and verify output correctness:
 ```bash
-./image_filter input.ppm output_gauss.ppm output_median.ppm
+./image_filter ppm_input_folder_path output_folder_path
 ```
 
-### 4. Convert Back to PNG/JPG
+### 4. Convert Back to PNG/JPG (Optional)
 ```bash
 python3 image_converter.py to_png input_ppm_folder output_png_folder
+```
+
+### 5. Run Benchmark to Visualize the Results
+```bash
+python3 plot_benchmark.py
 ```
 
 ## Technical Architecture Insights

@@ -21,6 +21,7 @@ We have generated and delivered three essential files to your Studio panel:
 - **`image_filter.cpp`**: The complete C++ implementation containing the binary PPM image reader/writer, serial filter baselines, optimized parallel OpenMP filter implementations, correctness verification, and high-precision timing harnesses.
 - **`image_converter.py`**: A python script using PIL/Pillow to easily convert standard PNG/JPEG images into binary PPM (P6) format for the C++ program, and convert the C++ outputs back to standard PNG/JPEG images for visualization.
 - **`Makefile`**: A clean Unix Makefile configured to build the C++ program with aggressive optimizations (`-O3`) and OpenMP compiler directives (`-fopenmp`).
+- **`plot_benchmark.py`**: A python script using pyplot to visualize the comparison results between sequential and parallel time taken.
 
 ---
 
@@ -51,16 +52,21 @@ This runs:
 g++ -O3 -fopenmp -Wall -Wextra image_filter.cpp -o image_filter
 ```
 
-### Step 4: Run the Benchmark and Filters
+### Step 4: Run the Filters
 Execute the binary with your input PPM image, output paths, and target thread count:
 ```bash
-./image_filter input_test.ppm output_gaussian.ppm output_median.ppm 4
+./image_filter ppm_input_folder_path output_folder_path 4
 ```
 *Note: Replace `4` with the number of physical cores/threads on your CPU.*
 
-### Step 5: Convert output PPM files back to PNG/JPG
+### Step 5: Convert output PPM files back to PNG/JPG (Optional)
 ```bash
 python3 image_converter.py to_png input_ppm_folder output_png_folder
+```
+
+### Step 6: Run Benchmark to Visualize the Results
+```bash
+python3 plot_benchmark.py
 ```
 
 ---
@@ -92,33 +98,3 @@ sort9(window); // custom inlined insertion sort
 This ensures zero thread contention for dynamic memory, delivering a massive boost in performance and scaling.
 
 ---
-
-## 5. Analyzing Performance & Writing Your Report
-
-In the paper, the authors noted up to a **5.5× speedup** for Gaussian filtering and a **4× speedup** for Median filtering on a 10-core/16-thread system when processing a high-resolution 3200x2400 image.
-
-When writing your course report, address these three topics to demonstrate a deep, professional understanding:
-
-1. **Why Gaussian Filter scales better than Median Filter**:
-   - The Gaussian filter is a linear filter performing static weighted sums; it has predictable data access and instruction streams.
-   - The Median filter involves conditional sorting branches inside the loop (`sort9`), which causes CPU branch mispredictions and is highly dependent on input pixel values.
-2. **Memory Bottlenecks vs. Compute Bound**:
-   - Image filtering is inherently memory-bandwidth-bound because we perform relatively few computations per byte read from DRAM.
-   - Restructuring your data in a continuous memory structure ensures spatial cache locality (sequential cache-line loading), which is crucial to prevent threads from stalling on memory reads.
-3. **Loop Scheduling Trade-offs**:
-   - We used `schedule(static)` because the computational load per pixel is uniform. Explain in your report why `static` scheduling has less overhead than `dynamic` scheduling when work per pixel is balanced, and under what circumstances (like variable-size kernels) `dynamic` or `guided` might be superior.
-
----
-
-## 6. High-Grade Extension Ideas
-
-To elevate your project from a basic implementation to an outstanding, high-grade submission, consider implementing these extensions:
-
-- **Experiment with OpenMP Loop Schedulers**: Benchmark the difference between `schedule(static)`, `schedule(dynamic)`, and `schedule(guided)` using different image resolutions and thread counts. Present the speedup curves in a graph.
-- **Implement Thread Affinity & Pinning**: Benchmark execution times with different thread affinity settings using environment variables:
-  ```bash
-  export OMP_PROC_BIND=true
-  export OMP_PLACES=cores
-  ```
-  Analyze how socket-pinning prevents threads from migrating across CPU cores, reducing L1/L2 cache misses.
-- **Vectorization (SIMD) Analysis**: Use compiler vectorization flags like `-ftree-vectorize` or `-fopt-info-vec` to check if your compiler auto-vectorizes the loop. Document how the compiler handles the SIMD layout of your RGB channels.
