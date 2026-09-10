@@ -13,11 +13,14 @@ The goal of this project is to implement, optimize, and benchmark 3D (RGB) digit
 ### Data Layout: Structure of Arrays (SoA)
 Color images are represented in the RGB format, requiring independent operations across three channels. Following the methodology of Section 3 and 5 of the paper, our implementation decomposes the image into three separate color channels ($R, G, B$) and represents them as independent, contiguous vectors (Structure of Arrays format) to maximize cache locality and memory throughput.
 
-### Dataset Used for Testing: 
-[Salt and Pepper Noise Dataset:Clean vs Noisy Image](https://www.kaggle.com/datasets/rajneesh231/salt-and-pepper-noise-images)
 ---
 
-## 2. Code Files Provided
+## 2. Dataset Used for Testing: 
+[Salt and Pepper Noise Dataset:Clean vs Noisy Image](https://www.kaggle.com/datasets/rajneesh231/salt-and-pepper-noise-images)
+
+---
+
+## 3. Code Files Provided
 
 We have 4 essential code files:
 - **`image_filter.cpp`**: The complete C++ implementation containing the binary PPM image reader/writer, serial filter baselines, optimized parallel OpenMP filter implementations, correctness verification, and high-precision timing harnesses.
@@ -27,7 +30,7 @@ We have 4 essential code files:
 
 ---
 
-## 3. Step-by-Step Implementation Workflow
+## 4. Step-by-Step Implementation Workflow
 
 To execute this project, follow these steps on your multicore system.
 
@@ -73,7 +76,7 @@ python3 plot_benchmark.py
 
 ---
 
-## 4. Key OpenMP Optimization Techniques Used
+## 5. Key OpenMP Optimization Techniques Used
 
 Our C++ implementation uses specific high-performance design patterns to ensure maximum scalability and speedup on multi-core processors:
 
