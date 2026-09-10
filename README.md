@@ -6,6 +6,8 @@ An optimized, high-performance C++ and OpenMP implementation of linear **Gaussia
 
 This project demonstrates how to accelerate computationally intensive color image processing workloads on multi-core CPU architectures without relying on dedicated GPU hardware.
 
+---
+
 ## Features
 - **PPM (P6) Image Parser**: A pure-C++ parser for reading and writing binary PPM images without external dependencies.
 - **Linear Gaussian Filter**: A 3x3 smoothing filter utilizing weighted averages to reduce uniform random noise.
@@ -13,6 +15,8 @@ This project demonstrates how to accelerate computationally intensive color imag
 - **Advanced OpenMP Worksharing**: Parallelized loops utilizing fine-grained pixel-level work distribution (`collapse(2)`) to scale effectively across core counts.
 - **Zero-Allocation Dynamic Kernel Sorting**: An inlined insertion sort operating entirely on thread-private stacks to eliminate memory contention locks.
 - **Full Testing Suite**: Integrates a verification module that checks parallel results against serial baselines pixel-by-pixel for absolute correctness.
+
+---
 
 ## Academic Benchmark Comparison
 The reference paper evaluated performance on an **Intel Core i7 processor (10 cores, 16 threads)** across three standard resolutions. The table below outlines the execution times (in milliseconds) and speedups achieved:
@@ -28,12 +32,21 @@ The reference paper evaluated performance on an **Intel Core i7 processor (10 co
 
 These figures highlight the excellent strong scaling characteristics of OpenMP thread management as the image computational workload increases.
 
+---
+
 ## File Structure
 - `image_filter.cpp`: Main implementation including the C++ image structure, serial baseline, parallel algorithms, and verification harness.
 - `image_converter.py`: Python script utilizing Pillow to convert standard image formats (`.png`, `.jpg`) into raw binary `.ppm` files and back.
 - `Makefile`: Automates building the project with aggressive compiler optimization flags (`-O3`) and OpenMP thread bindings.
 - `plot_benchmark.py`: Visualizes the Comparison between Sequential and Parallel Results
 - `image_filtering_project_guide.md`: A comprehensive report guide explaining cache optimization, SoA data structures, thread safety, and instructions for running benchmarks.
+
+---
+
+## Dataset
+[Salt and Pepper Noise Dataset:Clean vs Noisy Image](https://www.kaggle.com/datasets/rajneesh231/salt-and-pepper-noise-images)
+
+---
 
 ## Build & Execution Instructions
 Ensure you have GCC with OpenMP support installed.
@@ -65,6 +78,13 @@ python3 image_converter.py to_png input_ppm_folder output_png_folder
 ```bash
 python3 plot_benchmark.py
 ```
+
+---
+
+## Results
+![Results](benchmarks.png)
+
+---
 
 ## Technical Architecture Insights
 - **Thread Safety**: Independent pixel-level operations are completely thread-safe because each thread writes to its own assigned indices in the output array, eliminating any race conditions.
