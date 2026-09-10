@@ -13,7 +13,8 @@ The goal of this project is to implement, optimize, and benchmark 3D (RGB) digit
 ### Data Layout: Structure of Arrays (SoA)
 Color images are represented in the RGB format, requiring independent operations across three channels. Following the methodology of Section 3 and 5 of the paper, our implementation decomposes the image into three separate color channels ($R, G, B$) and represents them as independent, contiguous vectors (Structure of Arrays format) to maximize cache locality and memory throughput.
 
-**Dataset Used for Testing**: [Salt and Pepper Noise Dataset:Clean vs Noisy Image](https://www.kaggle.com/datasets/rajneesh231/salt-and-pepper-noise-images)
+### Dataset Used for Testing: 
+[Salt and Pepper Noise Dataset:Clean vs Noisy Image](https://www.kaggle.com/datasets/rajneesh231/salt-and-pepper-noise-images)
 ---
 
 ## 2. Code Files Provided
