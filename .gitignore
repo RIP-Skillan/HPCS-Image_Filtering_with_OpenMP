@@ -69,3 +69,4 @@ Testing/
 
 # Compiled Executable
 /image_filter
+/image_filter_cuda
