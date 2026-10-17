@@ -69,4 +69,5 @@ Testing/
 
 # Compiled Executable
 /image_filter
+/image_filter_mpi
 /image_filter_cuda
