@@ -153,9 +153,7 @@ __global__ void median_filter_parallel(int width, int height, unsigned char* inp
 
 bool exportToCSV(const std::string& filename,
                 const std::vector<double>& method_a,
-                const std::vector<double>& method_b,
-                const std::vector<double>& method_c,
-                const std::vector<double>& method_d)
+                const std::vector<double>& method_b)
 {
     // 1. Open the output file stream
     std::ofstream file(filename);
@@ -166,18 +164,16 @@ bool exportToCSV(const std::string& filename,
     }
 
     // 2. Write the CSV header line
-    file << "Number of Images,Sequential Gauss Filter,Parallel Guass Filter,Sequential Median Filter,Parallel Median Filter\n";
+    file << "Number of Images,Cuda Guass Filter,Cuda Median Filter\n";
 
     // 3. Find the minimum size among all vectors to avoid out-of-bounds access
-    size_t num_rows = std::min({method_a.size(), method_b.size(), method_c.size(), method_d.size()});
+    size_t num_rows = std::min({method_a.size(), method_b.size()});
 
     // 4. Write data row by row
     for (size_t i = 0; i < num_rows; ++i) {
         file << i << ","
              << method_a[i] << ","
-             << method_b[i] << ","
-             << method_c[i] << ","
-             << method_d[i] << "\n";
+             << method_b[i] << "\n";
     }
 
     file.close();
@@ -199,26 +195,26 @@ int main(int argc, char* argv[]) {
     std::string out_median_file;
     
     //std::vector<double> gauss_seq = {0};
-    //std::vector<double> gauss_pl = {0};
+    std::vector<double> gauss_pl = {0};
     //std::vector<double> med_seq = {0};
-    //std::vector<double> med_pl = {0};
+    std::vector<double> med_pl = {0};
 
     std::cout << "===== CUDA Image Filtering Benchmark =====" << std::endl;
-    //std::cout << "Threads configured: " << num_threads << " / " << omp_get_max_threads() << " max" << std::endl << std::endl;
-    //std::cout << "Gauss Filter\t\t\t\t|\tMedian Filter" << std::endl;
-    //std::cout << "Sequential Time\tParallel Time\t| Sequential Time\tParallel Time" << std::endl;
+    std::cout << "Gauss Filter\t\t\t\t|\tMedian Filter" << std::endl;
     try {
         if (std::filesystem::exists(input_folder) && std::filesystem::is_directory(input_folder)) {
+
+            cudaEvent_t start,stop;
+            cudaEventCreate(&start);
+            cudaEventCreate(&stop);
+            float gauss_time, med_time, temp;
+
             for (const auto& entry: std::filesystem::directory_iterator(input_folder)) {
                 if (std::filesystem::is_regular_file(entry.status()) && entry.path().extension() == ".ppm") {
                     file_path = entry.path();
                     input_file = file_path.string();
                     out_gauss_file = output_folder + (file_path.stem().string() + "_gauss" + file_path.extension().string());
                     out_median_file = (output_folder) + (file_path.stem().string() + "_median" + file_path.extension().string());
-
-
-                    // std::cout << "===== OpenMP Image Filtering Benchmark =====" << std::endl;
-                    // std::cout << "Loading image: " << input_file << "..." << std::endl;
 
                     Image input_img;
                     if (!read_ppm(input_file, input_img)) {
@@ -227,14 +223,10 @@ int main(int argc, char* argv[]) {
 
                     int w = input_img.width;
                     int h = input_img.height;
-                    //std::cout << "Resolution: " << w << "x" << h << " (" << (w * h / 1000000.0) << " Megapixels)" << std::endl;
-                    //std::cout << "Threads configured: " << num_threads << " / " << omp_get_max_threads() << " max" << std::endl << std::endl;
 
                     // Allocate output structures
-                    //Image out_gauss_serial = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
                     Image out_gauss_parallel = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
 
-                    //Image out_median_serial = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
                     Image out_median_parallel = {w, h, std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h), std::vector<unsigned char>(w * h)};
 
                     // Allocate Device Memory
@@ -246,31 +238,67 @@ int main(int argc, char* argv[]) {
                     dim3 dimBlock(16, 16);
                     dim3 dimGrid((w + 15) / 16, (h + 15) / 16);
 
-
-                    // ==========================================
-                    // 1. BENCHMARK GAUSSIAN FILTER
-                    // ==========================================
-                    //std::cout << "--> Running 3x3 Gaussian Filter..." << std::endl;
+                    //time_setup
+                    gauss_time = 0;
+                    med_time = 0;
 
                     //Parallel
+
+                    cudaEventRecord(start);
                     cudaMemcpy(d_input, input_img.r.data(), size, cudaMemcpyHostToDevice);
                     gaussian_filter_parallel<<<dimGrid, dimBlock>>>(w, h, d_input, d_output);
+                    cudaEventRecord(stop);
+                    cudaEventSynchronize(stop);
+                    cudaEventElapsedTime(&temp, start, stop);
+                    gauss_time += temp;
                     cudaMemcpy(out_gauss_parallel.r.data(), d_output, size, cudaMemcpyDeviceToHost);
+
+                    cudaEventRecord(start);
                     median_filter_parallel<<<dimGrid, dimBlock>>>(w, h, d_input, d_output);
+                    cudaEventRecord(stop);
+                    cudaEventSynchronize(stop);
+                    cudaEventElapsedTime(&temp, start, stop);
+                    med_time += temp;
                     cudaMemcpy(out_median_parallel.r.data(), d_output, size, cudaMemcpyDeviceToHost);
 
                     cudaMemcpy(d_input, input_img.g.data(), size, cudaMemcpyHostToDevice);
+                    cudaEventRecord(start);
                     gaussian_filter_parallel<<<dimGrid, dimBlock>>>(w, h, d_input, d_output);
+                    cudaEventRecord(stop);
+                    cudaEventSynchronize(stop);
+                    cudaEventElapsedTime(&temp, start, stop);
+                    gauss_time += temp;
                     cudaMemcpy(out_gauss_parallel.g.data(), d_output, size, cudaMemcpyDeviceToHost);
+
                     median_filter_parallel<<<dimGrid, dimBlock>>>(w, h, d_input, d_output);
+                    cudaEventRecord(stop);
+                    cudaEventSynchronize(stop);
+                    cudaEventElapsedTime(&temp, start, stop);
+                    med_time += temp;
+                    cudaEventRecord(start);
                     cudaMemcpy(out_median_parallel.g.data(), d_output, size, cudaMemcpyDeviceToHost);
 
                     cudaMemcpy(d_input, input_img.b.data(), size, cudaMemcpyHostToDevice);
+                    cudaEventRecord(start);
                     gaussian_filter_parallel<<<dimGrid, dimBlock>>>(w, h, d_input, d_output);
+                    cudaEventRecord(stop);
+                    cudaEventSynchronize(stop);
+                    cudaEventElapsedTime(&temp, start, stop);
+                    gauss_time += temp;
                     cudaMemcpy(out_gauss_parallel.b.data(), d_output, size, cudaMemcpyDeviceToHost);
+
+                    cudaEventRecord(start);
                     median_filter_parallel<<<dimGrid, dimBlock>>>(w, h, d_input, d_output);
+                    cudaEventRecord(stop);
+                    cudaEventSynchronize(stop);
+                    cudaEventElapsedTime(&temp, start, stop);
+                    med_time += temp;
                     cudaMemcpy(out_median_parallel.b.data(), d_output, size, cudaMemcpyDeviceToHost);
                     
+                    std::cout << "Gauss TIME: " << gauss_time << " ms\t\tMedian TIME: " << med_time << std::endl;
+                    gauss_pl.push_back(gauss_pl.back() + gauss_time);
+                    med_pl.push_back(med_pl.back() + med_time);
+
                     cudaFree(d_input);
                     cudaFree(d_output);
                     
@@ -278,12 +306,15 @@ int main(int argc, char* argv[]) {
                     write_ppm(out_median_file, out_median_parallel);
                 }
             }
+
+            cudaEventDestroy(start);
+            cudaEventDestroy(stop);
         }
     } catch (const std::filesystem::filesystem_error& e) {
         std::cerr << "Error: " << e.what() << "\n";
     }
     std::cout << "============================================" << std::endl;
-    //exportToCSV("benchmark_results.csv", gauss_seq, gauss_pl, med_seq, med_pl);
+    exportToCSV("cuda_benchmark_results.csv", gauss_pl, med_pl);
 
 	return 0;
 }
