@@ -179,8 +179,37 @@ void exchange_halo_rows(int rank, int size, int width, int local_h, std::vector<
     }
 }
 
+bool exportToCSV(const std::string& filename,
+                 const std::vector<double>& method_a,
+                 const std::vector<double>& method_b)
+{
+    // 1. Open the output file stream
+    std::ofstream file(filename);
+
+    if (!file.is_open()) {
+        std::cerr << "Error: Could not open file " << filename << " for writing.\n";
+        return false;
+    }
+
+    // 2. Write the CSV header line
+    file << "Number of Images,MPI Gauss Filter,MPI Median Filter\n";
+
+    // 3. Find the minimum size among all vectors to avoid out-of-bounds access
+    size_t num_rows = std::min({method_a.size(), method_b.size()});
+
+    // 4. Write data row by row
+    for (size_t i = 0; i < num_rows; ++i) {
+        file << i << ","
+        << method_a[i] << ","
+        << method_b[i] << "\n";
+    }
+
+    file.close();
+    std::cout << "Successfully saved data to " << filename << " (" << num_rows << " rows)\n";
+    return true;
+}
+
 int main(int argc, char* argv[]) {
-    std::cout << "Hello" << std::endl;
     MPI_Init(&argc, &argv);
 
     int rank, size;
@@ -211,6 +240,12 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    std::vector<double> gauss_pl = {0};
+    std::vector<double> med_pl = {0};
+    if (rank == 0) {
+        std::cout << "Gauss Time\t\tMedian Time" << std::endl;
+    }
+
     while (true) {
         int has_file = 0;
         std::string input_file, out_gauss_file, out_median_file;
@@ -226,7 +261,7 @@ int main(int argc, char* argv[]) {
                 input_file = file_path.string();
                 out_gauss_file = (output_folder / (file_path.stem().string() + "_gauss" + file_path.extension().string())).string();
                 out_median_file = (output_folder / (file_path.stem().string() + "_median" + file_path.extension().string())).string();
-                std::cout << input_file << std::endl;
+                //std::cout << input_file << std::endl;
                 ++it;
             }
         }
@@ -301,53 +336,60 @@ int main(int argc, char* argv[]) {
         gaussian_kernel_local(width, local_h, padded_g, local_out_g);
         gaussian_kernel_local(width, local_h, padded_b, local_out_b);
 
-        Image mpi_gauss_result = {width, height, std::vector<unsigned char>(width * height),
-            std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height)};
+        Image mpi_gauss_result = {width, height, std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height)};
 
-            MPI_Gatherv(local_out_r.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
-                        rank == 0 ? mpi_gauss_result.r.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-            MPI_Gatherv(local_out_g.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
-                        rank == 0 ? mpi_gauss_result.g.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-            MPI_Gatherv(local_out_b.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
-                        rank == 0 ? mpi_gauss_result.b.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(local_out_r.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
+                    rank == 0 ? mpi_gauss_result.r.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(local_out_g.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
+                    rank == 0 ? mpi_gauss_result.g.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(local_out_b.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
+                    rank == 0 ? mpi_gauss_result.b.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
-            MPI_Barrier(MPI_COMM_WORLD);
-            double end_gauss_mpi = MPI_Wtime();
+        MPI_Barrier(MPI_COMM_WORLD);
+        double end_gauss_mpi = MPI_Wtime();
 
-            if (rank == 0) {
-                write_ppm(out_gauss_file, mpi_gauss_result);
-            }
+        if (rank == 0) {
+            double gauss_total_time = (end_gauss_mpi - start_gauss_mpi) * 1000.0;
+            std::cout << gauss_total_time << "\t\t";
+            gauss_pl.push_back(gauss_pl.back() + gauss_total_time);
+            write_ppm(out_gauss_file, mpi_gauss_result);
+        }
 
-            // 2. MEDIAN FILTER
-            MPI_Barrier(MPI_COMM_WORLD);
-            double start_median_mpi = MPI_Wtime();
+        // 2. MEDIAN FILTER
+        MPI_Barrier(MPI_COMM_WORLD);
+        double start_median_mpi = MPI_Wtime();
 
-            exchange_halo_rows(rank, size, width, local_h, padded_r);
-            exchange_halo_rows(rank, size, width, local_h, padded_g);
-            exchange_halo_rows(rank, size, width, local_h, padded_b);
+        exchange_halo_rows(rank, size, width, local_h, padded_r);
+        exchange_halo_rows(rank, size, width, local_h, padded_g);
+        exchange_halo_rows(rank, size, width, local_h, padded_b);
 
-            median_kernel_local(width, local_h, padded_r, local_out_r);
-            median_kernel_local(width, local_h, padded_g, local_out_g);
-            median_kernel_local(width, local_h, padded_b, local_out_b);
+        median_kernel_local(width, local_h, padded_r, local_out_r);
+        median_kernel_local(width, local_h, padded_g, local_out_g);
+        median_kernel_local(width, local_h, padded_b, local_out_b);
 
-            Image mpi_median_result = {width, height, std::vector<unsigned char>(width * height),
-                std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height)};
+        Image mpi_median_result = {width, height, std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height)};
 
-                MPI_Gatherv(local_out_r.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
-                            rank == 0 ? mpi_median_result.r.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-                MPI_Gatherv(local_out_g.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
-                            rank == 0 ? mpi_median_result.g.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
-                MPI_Gatherv(local_out_b.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
-                            rank == 0 ? mpi_median_result.b.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(local_out_r.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
+                    rank == 0 ? mpi_median_result.r.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(local_out_g.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
+                    rank == 0 ? mpi_median_result.g.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
+        MPI_Gatherv(local_out_b.data(), local_num_bytes, MPI_UNSIGNED_CHAR,
+                    rank == 0 ? mpi_median_result.b.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
-                MPI_Barrier(MPI_COMM_WORLD);
-                double end_median_mpi = MPI_Wtime();
+        MPI_Barrier(MPI_COMM_WORLD);
+        double end_median_mpi = MPI_Wtime();
 
-                if (rank == 0) {
-                    double mpi_total_time = (end_median_mpi - start_median_mpi) * 1000.0;
-                    std::cout << "Processed file: " << input_file << " in " << mpi_total_time << " ms\n";
-                    write_ppm(out_median_file, mpi_median_result);
-                }
+        if (rank == 0) {
+            double med_total_time = (end_median_mpi - start_median_mpi) * 1000.0;
+            std::cout << med_total_time << std::endl;
+            med_pl.push_back(med_pl.back() + med_total_time);
+            //std::cout << "Processed file: " << input_file << " in " << mpi_total_time << " ms\n";
+            write_ppm(out_median_file, mpi_median_result);
+        }
+    }
+
+    if (rank == 0) {
+        exportToCSV("mpi_benchmark_results.csv", gauss_pl, med_pl);
     }
 
     MPI_Finalize();

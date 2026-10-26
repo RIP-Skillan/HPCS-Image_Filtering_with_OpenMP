@@ -1,5 +1,14 @@
-1. python3 image_converter.py to_ppm ../dataset/Dataset1/Noisy_folder ../dataset/Dataset1/Noisy_ppm/
-2. make
-3. ./image_filter ../dataset/Dataset1/Noisy_ppm ../dataset/Dataset1/output_ppm/
-4. python plot_benchmark.py
+python3 image_converter.py to_ppm ../dataset/Dataset1/Noisy_folder ../dataset/Dataset1/Noisy_ppm/
+
+make
+./image_filter ../dataset/Dataset1/Noisy_ppm ../dataset/Dataset1/output_ppm/
+
+nvcc -arch=sm_89 image_filter_cuda.cu -o image_filter_cuda
+./image_filter_cuda ../dataset/Dataset1/Noisy_ppm/ ../dataset/Dataset1/output_ppm/
+
+mpicxx image_filter_mpi.cpp -o image_filter_mpi
+mpiexec -np 8 image_filter_mpi ../dataset/Dataset1/Noisy_ppm/ ../dataset/Dataset1/output_ppm/
+
+python plot_benchmark.py
+
 

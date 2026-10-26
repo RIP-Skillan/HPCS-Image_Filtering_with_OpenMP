@@ -164,7 +164,7 @@ bool exportToCSV(const std::string& filename,
     }
 
     // 2. Write the CSV header line
-    file << "Number of Images,Cuda Guass Filter,Cuda Median Filter\n";
+    file << "Number of Images,Cuda Gauss Filter,Cuda Median Filter\n";
 
     // 3. Find the minimum size among all vectors to avoid out-of-bounds access
     size_t num_rows = std::min({method_a.size(), method_b.size()});
