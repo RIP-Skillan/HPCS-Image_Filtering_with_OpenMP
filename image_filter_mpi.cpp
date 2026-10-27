@@ -124,7 +124,7 @@ void gaussian_kernel_local(int width, int local_h, const std::vector<unsigned ch
                     int px = clamp(x + kx, 0, width - 1);
                     int py = y + ky;
                     int weight = (ky == 0 && kx == 0) ? 4 :
-                    ((ky == 0 || kx == 0) ? 2 : 1);
+                                ((ky == 0 || kx == 0) ? 2 : 1);
                     sum += padded_in[py * width + px] * weight;
                 }
             }
@@ -319,7 +319,6 @@ int main(int argc, char* argv[]) {
 
         // 1. GAUSSIAN FILTER
         MPI_Barrier(MPI_COMM_WORLD);
-        double start_gauss_mpi = MPI_Wtime();
 
         MPI_Scatterv(rank == 0 ? input_img.r.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR,
                      scatter_dest_r, local_num_bytes, MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
@@ -332,9 +331,11 @@ int main(int argc, char* argv[]) {
         exchange_halo_rows(rank, size, width, local_h, padded_g);
         exchange_halo_rows(rank, size, width, local_h, padded_b);
 
+        double start_gauss_mpi = MPI_Wtime();
         gaussian_kernel_local(width, local_h, padded_r, local_out_r);
         gaussian_kernel_local(width, local_h, padded_g, local_out_g);
         gaussian_kernel_local(width, local_h, padded_b, local_out_b);
+        double end_gauss_mpi = MPI_Wtime();
 
         Image mpi_gauss_result = {width, height, std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height)};
 
@@ -346,10 +347,14 @@ int main(int argc, char* argv[]) {
                     rank == 0 ? mpi_gauss_result.b.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
         MPI_Barrier(MPI_COMM_WORLD);
-        double end_gauss_mpi = MPI_Wtime();
+
+        double start = start_gauss_mpi, end = end_gauss_mpi;
+
+        MPI_Reduce(&start_gauss_mpi, &start, 1, MPI_DOUBLE, MPI_MIN, 0,MPI_COMM_WORLD);
+        MPI_Reduce(&end_gauss_mpi, &end, 1, MPI_DOUBLE, MPI_MAX, 0,MPI_COMM_WORLD);
 
         if (rank == 0) {
-            double gauss_total_time = (end_gauss_mpi - start_gauss_mpi) * 1000.0;
+            double gauss_total_time = (end - start) * 1000.0;
             std::cout << gauss_total_time << "\t\t";
             gauss_pl.push_back(gauss_pl.back() + gauss_total_time);
             write_ppm(out_gauss_file, mpi_gauss_result);
@@ -357,15 +362,16 @@ int main(int argc, char* argv[]) {
 
         // 2. MEDIAN FILTER
         MPI_Barrier(MPI_COMM_WORLD);
-        double start_median_mpi = MPI_Wtime();
 
         exchange_halo_rows(rank, size, width, local_h, padded_r);
         exchange_halo_rows(rank, size, width, local_h, padded_g);
         exchange_halo_rows(rank, size, width, local_h, padded_b);
 
+        double start_median_mpi = MPI_Wtime();
         median_kernel_local(width, local_h, padded_r, local_out_r);
         median_kernel_local(width, local_h, padded_g, local_out_g);
         median_kernel_local(width, local_h, padded_b, local_out_b);
+        double end_median_mpi = MPI_Wtime();
 
         Image mpi_median_result = {width, height, std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height), std::vector<unsigned char>(width * height)};
 
@@ -377,10 +383,12 @@ int main(int argc, char* argv[]) {
                     rank == 0 ? mpi_median_result.b.data() : NULL, sendcounts.data(), displs.data(), MPI_UNSIGNED_CHAR, 0, MPI_COMM_WORLD);
 
         MPI_Barrier(MPI_COMM_WORLD);
-        double end_median_mpi = MPI_Wtime();
+
+        MPI_Reduce(&start_median_mpi, &start, 1, MPI_DOUBLE, MPI_MIN, 0,MPI_COMM_WORLD);
+        MPI_Reduce(&end_median_mpi, &end, 1, MPI_DOUBLE, MPI_MAX, 0,MPI_COMM_WORLD);
 
         if (rank == 0) {
-            double med_total_time = (end_median_mpi - start_median_mpi) * 1000.0;
+            double med_total_time = (end - start) * 1000.0;
             std::cout << med_total_time << std::endl;
             med_pl.push_back(med_pl.back() + med_total_time);
             //std::cout << "Processed file: " << input_file << " in " << mpi_total_time << " ms\n";
